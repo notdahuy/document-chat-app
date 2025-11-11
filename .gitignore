@@ -1,0 +1,17 @@
+# Môi trường ảo Python
+/venv
+
+# Biến môi trường/API Keys
+.env
+
+# File tạm do Python sinh ra
+__pycache__/
+*.pyc
+
+# Files FAISS 
+*.bin
+*.npy
+
+# Files Streamlit/PyTorch cache 
+.streamlit/
+/tmp/
