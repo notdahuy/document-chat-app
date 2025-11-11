@@ -2,7 +2,6 @@ import numpy as np
 import faiss
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-from sympy.codegen.fnodes import dimension
 from docx import Document
 
 
@@ -66,11 +65,3 @@ def create_vector_store(pdf_path, index_file="faiss_index.bin", chunks_file="chu
     print(f"Index saved to {index_file}")
 
     return index, chunks
-
-if __name__ == "__main__":
-    index, chunks = create_vector_store(
-        pdf_path="open_circuits.pdf",
-        index_file="faiss_index.bin",
-        chunks_file="chunks.npy"
-    )
-    print(f"Number of vectors in index: {index.ntotal}")
