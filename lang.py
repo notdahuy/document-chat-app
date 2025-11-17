@@ -15,6 +15,7 @@ lang_dict = {
         "error_no_query": "Vui lòng nhập câu hỏi.",
         "error_llm_key": "Kết nối thất bại. Thử lại sau",
         "warning_no_index": "Vui lòng kiểm tra lại file.",
+        "chat_header": "Trò chuyện"
     },
     "English": {
         "title": "Document Q&A Chatbot",
@@ -32,5 +33,6 @@ lang_dict = {
         "error_no_query": "Please enter a question.",
         "error_llm_key": "Connection error. Please try again.",
         "warning_no_index": "Cannot create index. Please check the PDF file.",
+        "chat_header": "Chat"
     }
 }

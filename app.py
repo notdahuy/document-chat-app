@@ -18,9 +18,8 @@ load_dotenv()
 # Load base resources (Model and Client) only once
 @st.cache_resource
 def load_base_resources():
-    """Loads SentenceTransformer Model and Gemini Client."""
+    # Loads SentenceTransformer Model and Gemini Client
     model = SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')
-
     client = None
     try:
         api_key = os.getenv("GEMINI_API_KEY")
@@ -74,19 +73,23 @@ def create_vector_store_for_upload(uploaded_file, _model):
 
 
 # Main RAG function
-def retrieve_and_generate(query, model, index, chunks, client, k=15):
+def retrieve_and_generate(query, model, index, chunks, client, chat_history, k=15):
     """Performs retrieval and generation using Gemini LLM."""
     if client is None:
         return "Error: Cannot connect to Gemini LLM. Please check your API key.", ""
 
-    # 1. Query Encoding
+    # Query Encoding
     query_vector = model.encode([query]).astype('float32')
-    # 2. Retrieval
+    # Retrieval
     distances, indices = index.search(query_vector, k)
     retrieved_chunks = [chunks[i] for i in indices[0]]
     context = "\n\n---\n\n".join(retrieved_chunks)
-
-    # 3. Generation Prompt (Injecting response language)
+    # Format chat history
+    formatted_history = ""
+    for msg in chat_history[-4:]:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        formatted_history += f"{role}: {msg['content']}\n"
+    # Generation Prompt (Injecting response language)
     system_prompt = (
         "You are a professional document Q&A assistant. Your task is to answer "
         "the user's question **ONLY based on the CONTEXT** provided. "
@@ -95,7 +98,11 @@ def retrieve_and_generate(query, model, index, chunks, client, k=15):
         "stating that the information is not found in the source documents, using the "
         "**SAME LANGUAGE as the user's question**. Do not invent information."
     )
-    user_content_base = f"CONTEXT:\n{context}\n\n---\n\nQUESTION: {query}"
+    user_content_base = (
+        f"CONTEXT:\n{context}\n\n---\n\n"
+        f"CHAT HISTORY:\n{formatted_history}\n---\n\n"
+        f"QUESTION: {query}"
+    )
     full_prompt = f"{system_prompt}\n\n[RAG Data]\n\n{user_content_base}"
 
     # Call API
@@ -114,7 +121,7 @@ def retrieve_and_generate(query, model, index, chunks, client, k=15):
         return f"An unexpected error occurred: {e}", context
 
 
-# --- Streamlit App Configuration ---
+# Streamlit App Configuration
 st.set_page_config(page_title="RAG Chatbot", layout="wide")
 
 
@@ -139,6 +146,9 @@ index, chunks = None, None
 st.title(lang["title"])
 st.markdown("---")
 
+if "message" not in st.session_state:
+    st.session_state["message"] = []
+
 # 1. File Upload Area (Single file only)
 uploaded_file = st.file_uploader(
     lang["upload_label"],
@@ -151,38 +161,42 @@ if uploaded_file:
     with st.spinner(f"Processing {uploaded_file.name}..."):
         index, chunks = create_vector_store_for_upload(uploaded_file, model)
 
-# --- Q&A AREA ---
+# Q&A Area
 st.markdown("---")
 
-# 2. Query Input
-query = st.text_input(
-    lang["query_label"],
-    placeholder=lang["query_placeholder"]
-)
+for message in st.session_state["message"]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-
-if st.button(lang["button_text"]):
-    # Changed uploaded_files check to uploaded_file
+if query := st.chat_input(lang["query_placeholder"]):
     if not uploaded_file:
         st.warning(lang["error_no_file"])
-    elif not query:
-        st.warning(lang["error_no_query"])
     elif client is None:
         st.error(lang["error_llm_key"])
     else:
+        st.session_state["message"].append({"role": "user", "content": query})
+        with st.chat_message("user"):
+            st.markdown(query)
+
         with st.spinner(lang["status_processing"]):
-            # Pass the selected language to the RAG function
+            history_for_prompt = st.session_state.message[:-1]
             answer, context = retrieve_and_generate(
-                query,
-                model,
-                index,
-                chunks,
-                client,
+                query=query,
+                model=model,
+                index=index,
+                chunks=chunks,
+                client=client,
+                chat_history=history_for_prompt
             )
 
-            # Display results
-            st.subheader(lang["answer_header"])
-            st.info(answer)
+            is_error = False
+            if answer.startswith("Error") or answer.startswith("Gemini API Error"):
+                is_error = True
 
-            with st.expander(lang["context_expander"]):
-                st.text(context)
+            with st.chat_message("assistant"):
+                st.info(answer)
+                with st.expander(lang["context_expander"]):
+                    st.text(context)
+            if not is_error:
+                st.session_state.message.append({"role": "assistant", "content": answer})
+
